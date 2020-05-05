@@ -1,0 +1,14 @@
+(executable
+ (name diff)
+ (public_name diff)
+ (package asmutils)
+ (libraries
+        shexp.process
+        core
+        patdiff.lib
+;        ppxlib.print_diff
+        )
+ (preprocess (pps ppx_jane)))
+
+(alias (name DEFAULT) (deps probes.ml.pp))
+
