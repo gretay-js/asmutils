@@ -2,7 +2,9 @@ open Core
 
 let verbose = ref false
 
-let set_verbose v = verbose := v
+let set_verbose v =
+  verbose := v;
+  Elf.verbose := v
 
 let emit_sym s = sprintf "<%s>" s
 
@@ -78,7 +80,14 @@ let emit_instr s =
         (String.concat ~sep:" " s)
         ()
 
-let symbolic instr =
+let get_symbol_at elf addr =
+  if Int64.(addr <= 0x400000L) then None
+  else
+    match Elf.get_symbol_at elf addr with
+    | None -> None
+    | Some sym -> Elf.get_name elf sym
+
+let symbolic elf instr =
   let instr = String.strip instr in
   match String.split_on_chars ~on:[','] instr with
   | op_and_arg :: otherargs ->
@@ -95,12 +104,27 @@ let symbolic instr =
       in
       List.map args ~f:(fun arg ->
           let arg = String.strip arg in
-          if String.contains arg ' ' then parse_sym arg |> emit_sym else arg)
+          if String.contains arg ' ' then parse_sym arg |> emit_sym
+          else
+            match String.chop_prefix arg ~prefix:"$" with
+            | Some n -> (
+                let addr = Int64.of_string n in
+                match get_symbol_at elf addr with
+                | None -> arg
+                | Some sym -> emit_sym sym )
+            | _ -> (
+                match String.lsplit2 arg ~on:"(" with
+                | Some (n, rest) -> (
+                    let addr = Int64.of_string n in
+                    match get_symbol_at elf addr with
+                    | None -> arg
+                    | Some sym -> emit_sym sym )
+                | _ -> arg ))
   | _ -> failwithf "Unexpected format of instruction: %s" instr ()
 
-let symbolic_rip instr ~target =
+let symbolic_rip elf instr ~target =
   let sym = parse_sym target in
-  let instr = symbolic instr in
+  let instr = symbolic elf instr in
   List.map instr ~f:(fun arg ->
       if String.is_suffix arg ~suffix:"(%rip)" then emit_sym sym else arg)
 
@@ -109,13 +133,13 @@ let parse_func_name line =
   | Some s -> parse_sym s
   | None -> failwithf "Unexpected format %s\n" line ()
 
-let parse_instr line =
+let parse_instr elf line =
   match String.split_on_chars ~on:['\t'; '#'] line with
-  | [_addr; instr] -> symbolic instr
-  | [_addr; instr; target] -> symbolic_rip instr ~target
+  | [_addr; instr] -> symbolic elf instr
+  | [_addr; instr; target] -> symbolic_rip elf instr ~target
   | _ -> failwithf "Unexpected instruction disassembly\n%s\n" line ()
 
-let parse_line ~file ~asm acc line =
+let parse_line ~elf ~file ~asm acc line =
   let line = String.strip line in
   if String.is_empty line then
     match acc with
@@ -139,12 +163,13 @@ let parse_line ~file ~asm acc line =
     match acc with
     | [] -> [parse_func_name line]
     | body ->
-        let instr = parse_instr line |> emit_instr in
+        let instr = parse_instr elf line |> emit_instr in
         instr :: body
 
 let disass file =
   let asm = String.Table.create () in
-  let f = parse_line ~file ~asm in
+  let elf = Elf.create ~elf_executable:file in
+  let f = parse_line ~elf ~file ~asm in
   let last = objdump_fold file ~init:[] ~f in
   match f last "" with
   | [] -> asm

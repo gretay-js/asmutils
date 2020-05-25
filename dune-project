@@ -18,6 +18,7 @@ Copyright (c) 2019 Jane Street Group LLC.
  (depends
   (ocaml (>= 4.09))
   (dune (>= 1.8))
+  owee
   core
   ppx_jane
  )

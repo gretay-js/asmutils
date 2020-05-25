@@ -3,6 +3,7 @@
  (public_name diff)
  (package asmutils)
  (libraries
+        owee
         shexp.process
         core
         patdiff.lib
