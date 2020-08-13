@@ -1,5 +1,8 @@
 open Core
 
+module P = Patdiff
+module PC = P.Patdiff_core
+
 let verbose = ref false
 
 let set_verbose v =
@@ -11,25 +14,25 @@ let emit_sym s = sprintf "<%s>" s
 (* Almost identical to Patdiff_lib.Patdiff_core.patdiff except that it
    instead of output to string*)
 let patdiff ~name1 ~file1 prev ~name2 ~file2 next =
-  let header file name = sprintf "%s in %s" (emit_sym name) file in
+  let header file name = sprintf "%s in %s" (emit_sym name) file
+                       |> P.File_name.Fake in
   let prev_file = header file1 name1 in
   let next_file = header file2 name2 in
-  let open Patdiff_lib.Patdiff_core in
-  let rules = Format.Rules.default in
-  let output = Output.Ansi in
+  let rules = P.Format.Rules.default in
+  let output = P.Output.Ansi in
   let keep_ws = false in
   let hunks =
-    diff ~context:default_context ~keep_ws
-      ~line_big_enough:default_line_big_enough ~prev ~next
-    |> refine ~rules ~produce_unified_lines:true ~output ~keep_ws
+    PC.diff ~context:PC.default_context ~keep_ws
+      ~line_big_enough:PC.default_line_big_enough ~prev ~next
+    |> PC.refine ~rules ~produce_unified_lines:true ~output ~keep_ws
          ~split_long_lines:true ~interleave:true
-         ~word_big_enough:default_word_big_enough
+         ~word_big_enough:PC.default_word_big_enough
   in
   match hunks with
   | [] -> `Same
   | _ ->
-      print ~prev_file ~next_file ~rules ~output
-        ~location_style:Format.Location_style.Diff hunks;
+      PC.print ~file_names:(prev_file, next_file) ~rules ~output
+        ~location_style:P.Format.Location_style.Diff hunks;
       print_endline "";
       `Different ()
 
@@ -113,8 +116,8 @@ let symbolic elf instr =
                 | None -> arg
                 | Some sym -> emit_sym sym )
             | _ -> (
-                match String.lsplit2 arg ~on:"(" with
-                | Some (n, rest) -> (
+                match String.lsplit2 arg ~on:'(' with
+                | Some (n, _rest) -> (
                     let addr = Int64.of_string n in
                     match get_symbol_at elf addr with
                     | None -> arg

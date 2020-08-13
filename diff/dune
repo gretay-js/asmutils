@@ -6,7 +6,7 @@
         owee
         shexp.process
         core
-        patdiff.lib
+        patdiff
 ;        ppxlib.print_diff
         )
  (preprocess (pps ppx_jane)))
